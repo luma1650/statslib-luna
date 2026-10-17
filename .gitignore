@@ -1,0 +1,96 @@
+
+# ==========================================
+# VIRTUAL ENVIRONMENTS
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+
+# ==========================================
+# PYTHON CACHE
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# BUILD & PACKAGING
+# ==========================================
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# ==========================================
+# TESTING & COVERAGE
+# ==========================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+test-results/
+
+# ==========================================
+# TYPE CHECKERS & LINTERS
+# ==========================================
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.dmypy.json
+.dmypy.json.*
+
+# ==========================================
+# IDEs & EDITORS
+# ==========================================
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# ==========================================
+# BENCHMARKS & PROFILING
+# ==========================================
+.prof
+*.prof
+*.pstats
+.pyinstrument/
+benchmark-results/
+profiling-results/
+
+# ==========================================
+# TEMPORARY FILES & LOGS
+# ==========================================
+*.log
+*.tmp
+*.bak
+*.temp
+.cache/
+tmp/
+temp/
+
+# ==========================================
+# OPERATING SYSTEM
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# ENVIRONMENT VARIABLES & SECRETS
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# JUPYTER
+# ==========================================
+.ipynb_checkpoints/
