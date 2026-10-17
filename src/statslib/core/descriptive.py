@@ -2,22 +2,11 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import Any, TypeVar, Protocol
 
-
-class Comparable(Protocol):
-    def __lt__(self, other) -> bool:
-        pass
-
-    def __eq__(self, other) -> bool:
-        pass
-
-    def __le__(self, other) -> bool:
-        pass
-
-
-C = TypeVar("C", bound=Comparable)
+from protocols import SupportsLE
 
 
 def _iter_len(iterable: Iterable[float]) -> int:
+    """Count elements by consuming iterable once."""
     n = 0
     for _ in iterable:
         n += 1
@@ -26,7 +15,17 @@ def _iter_len(iterable: Iterable[float]) -> int:
 
 
 def mean(iterable: Iterable[float]) -> float:
-    """Return the arithmetic mean of an iterable."""
+    """Return the arithmetic mean of numeric observations.
+
+    Args:
+        iterable: Observations supporting addition and division.
+
+    Raises:
+        ValueError: The iterable is empty.
+
+    Notes:
+        Consume the iterable once without materializing it.
+    """
     n = 0
     cur_sum = 0
     for item in iterable:
@@ -40,6 +39,18 @@ def mean(iterable: Iterable[float]) -> float:
 
 
 def median(iterable: Iterable[float]) -> float:
+    """Return the middle value or the average of the middle pair.
+
+    Args:
+        iterable: Orderable numeric observations, materialized internally.
+
+    Raises:
+        ValueError: The iterable is empty.
+
+    Notes:
+        Selection modifies only an internal list, leaving the input
+        collection unchanged.
+    """
     data = list(iterable)
     n = len(data)
 
@@ -56,7 +67,20 @@ def median(iterable: Iterable[float]) -> float:
 
 
 def mode[T](iterable: Iterable[T]) -> T:
-    """Return the first mode of an iterable."""
+    """Return a most frequent observation.
+
+    Args:
+        iterable: Observations, materialized internally.
+
+    Raises:
+        ValueError: The iterable is empty.
+
+    Notes:
+        Hashable observations use counting and select the first encountered
+        value in a tie. Unhashable orderable observations use sorting and
+        select the first tied value in sorted order. The equality-only
+        fallback selects the first encountered tied value.
+    """
     data = list(iterable)
 
     if not data:
@@ -107,6 +131,21 @@ def mode[T](iterable: Iterable[T]) -> T:
 
 
 def multimode[T](iterable: Iterable[T]) -> list[T]:
+    """Return the modal candidates produced by counting or comparison.
+
+    Args:
+        iterable: Observations, materialized internally.
+
+    Returns:
+        A list, empty when the input is empty.
+
+    Notes:
+        Hashable values produce distinct modes in encounter order. The
+        sorting fallback accumulates candidates when a running count
+        matches or exceeds the current best; its result may omit the first
+        sorted value when all counts are one. The equality-only fallback
+        can include repeated occurrences of the same modal value.
+    """
     data = list(iterable)
 
     if not data:
@@ -162,6 +201,17 @@ def multimode[T](iterable: Iterable[T]) -> list[T]:
 
 
 def weighted_mean(iterable: Iterable[float], weights : Iterable[float]) -> float:
+    """Return the sum of weighted observations divided by total weight.
+
+    Args:
+        iterable: Numeric observations consumed once.
+        weights: Numeric weights consumed alongside the observations.
+            Negative weights are accepted.
+
+    Raises:
+        ValueError: The iterables have different lengths or the total
+            weight is zero, including when both iterables are empty.
+    """
     total_weight = 0.0
     sum_weight = 0.0
     for item, weight in zip(iterable, weights, strict=True):
@@ -175,7 +225,24 @@ def weighted_mean(iterable: Iterable[float], weights : Iterable[float]) -> float
 
 
 
-def quickselect(data: list[C], k: int) -> C:
+def quickselect[T: SupportsLE](data: list[T], k: int) -> T:
+    """Select the observation at zero-based sorted rank k.
+
+    Args:
+        data: Mutable list of mutually orderable observations.
+        k: Rank from zero to len(data) - 1.
+
+    Returns:
+        The value that would occupy rank k after sorting.
+
+    Raises:
+        IndexError: k is outside the list, including for an empty list.
+        RuntimeError: The selection loop fails to locate the requested rank.
+
+    Notes:
+        Interior-rank selection partitions data in place. Endpoint ranks
+        use min() or max() without rearranging the list.
+    """
     if not 0 <= k < len(data):
         raise IndexError("k is out of range")
     elif k == 0:
@@ -199,8 +266,22 @@ def quickselect(data: list[C], k: int) -> C:
     raise RuntimeError("Quickselect failed")
 
 
-def partition(data: list[C], left: int, right: int) -> int:
-    """Partition a list into two halves, for Quicksort/Quickselect. Return the index of the pivot."""
+def partition(data: list[SupportsLE], left: int, right: int) -> int:
+    """Partition an inclusive list segment around its rightmost value.
+
+    Args:
+        data: Mutable list whose elements support ordering.
+        left: Inclusive start index of the segment.
+        right: Inclusive end index and initial pivot position.
+
+    Returns:
+        The final pivot index. Values before it in the segment are less
+        than or equal to the pivot; values after it are greater.
+
+    Notes:
+        Mutate data in place. Callers must provide valid bounds satisfying
+        0 <= left <= right < len(data); bounds are not validated explicitly.
+    """
     pivot = data[right]
     i = left
     for j in range(left, right):
