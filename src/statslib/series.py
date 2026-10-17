@@ -52,7 +52,6 @@ class StatsSeries[T]:
     def mode(self) -> T:
         return mode(self)
 
-    @property
     def weighted_mean(self, weights: Iterable[float]) -> float:
         return weighted_mean(self, weights)
 
