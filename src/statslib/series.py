@@ -1,4 +1,11 @@
 from collections.abc import Iterable, Iterator, Mapping
+from statslib.core.descriptive import (
+    mean,
+    median,
+    mode,
+    multimode,
+    weighted_mean,
+)
 
 
 class StatsSeries[T]:
@@ -32,3 +39,23 @@ class StatsSeries[T]:
 
     def __repr__(self):
         return f"StatsSeries({list(self._data)!r})"
+
+    @property
+    def mean(self) -> float:
+        return mean(self)
+
+    @property
+    def median(self) -> T:
+        return median(self)
+
+    @property
+    def mode(self) -> T:
+        return mode(self)
+
+    @property
+    def weighted_mean(self, weights: Iterable[float]) -> float:
+        return weighted_mean(self, weights)
+
+    @property
+    def multimode(self) -> list[T]:
+        return multimode(self)
