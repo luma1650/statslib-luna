@@ -3,7 +3,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Self, TYPE_CHECKING, overload
+from typing import Self, TYPE_CHECKING, overload, Any
 
 from statslib.core.descriptive import (
     mean,
@@ -21,6 +21,7 @@ from statslib.core.dispersion import (
 )
 
 if TYPE_CHECKING:
+    from matplotlib.axes import Axes
     from statslib.frequency.table import FrequencyTable
 
 
@@ -194,3 +195,50 @@ class AbstractStatsSeries[T](Sequence[T], ABC):
     def excess_kurtosis(self) -> float:
         """Return unadjusted excess kurtosis; require positive variance."""
         return self.standard_moment(4) - 3
+
+    def plot(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
+        """Plot observations against their zero-based index; return Axes.
+
+        Matplotlib is optional. Pass ax to compose plots and kwargs to
+        Axes.plot. Call pyplot.show() or ax.figure.savefig() yourself.
+        """
+        from statslib.plotting import get_axes, require_data
+        require_data(self)
+        ax = get_axes(ax)
+        ax.plot(range(len(self)), tuple(self), **kwargs)
+        ax.set_xlabel("Index")
+        ax.set_ylabel("Value")
+        return ax
+
+    def hist(self, bins=10, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
+        """Plot a numeric histogram; forward bins and kwargs to Axes.hist."""
+        from statslib.plotting import get_axes, require_data
+        require_data(self)
+        ax = get_axes(ax)
+        ax.hist(tuple(self), bins=bins, **kwargs)
+        value_label = "Value"
+        count_label = "Density" if kwargs.get("density", False) else "Frequency"
+        if kwargs.get("orientation", "vertical") == "horizontal":
+            ax.set_xlabel(count_label)
+            ax.set_ylabel(value_label)
+        else:
+            ax.set_xlabel(value_label)
+            ax.set_ylabel(count_label)
+        return ax
+
+    def boxplot(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
+        """Plot a box-and-whisker summary; forward kwargs to Axes.boxplot."""
+        from statslib.plotting import get_axes, require_data
+        require_data(self)
+        ax = get_axes(ax)
+        ax.boxplot(tuple(self), **kwargs)
+        return ax
+
+    def ecdf(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
+        """Plot the empirical CDF; forward kwargs to Axes.ecdf."""
+        from statslib.plotting import get_axes, require_data
+        require_data(self)
+        ax = get_axes(ax)
+        from statslib.plotting import draw_ecdf
+        draw_ecdf(ax, tuple(self), **kwargs)
+        return ax

@@ -5,8 +5,11 @@ from functools import cached_property
 from math import ceil, floor, fsum, isfinite, sqrt
 from typing import Callable, Any, TYPE_CHECKING, Self
 
+from ..abc.frequency import AbstractFrequencyTable
+
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
+    from .rows import FrequencyRow
 
 from protocols import SupportsGT, SupportsLT
 from statslib.core.descriptive import weighted_mean
@@ -19,12 +22,13 @@ except ImportError:
     from frozendict import frozendict  # PyPI
 
 
-class FrequencyTable[T](Mapping[T, int]):
+class FrequencyTable[T](AbstractFrequencyTable[T]):
     """Map distinct hashable observations to their absolute frequencies.
 
     Iteration preserves first-encounter order, and len() counts distinct
     values. Statistical properties are computed lazily and cached.
     """
+
     def __init__(self, data: Iterable[T]) -> None:
         """Count observations from data, consuming the iterable once.
 
@@ -494,3 +498,29 @@ class FrequencyTable[T](Mapping[T, int]):
         for value, count in validated.items():
             counts[value] = counts.get(value, 0) + count
         return type(self).from_frequencies(counts)
+
+    def rows(self, *, sort: bool = False, key=None, reverse: bool = False) -> "tuple[FrequencyRow[T], ...]":
+        """Return immutable FrequencyRow objects without expanding observations.
+
+        Default order is encounter order. sort=True orders by observation;
+        key or reverse also requests sorting. Cumulative columns follow
+        the displayed order, rather than an independently sorted CDF.
+        """
+        from .rows import FrequencyRow
+        values = sorted(self, key=key, reverse=reverse) if sort or key is not None or reverse else self
+        cumulative = 0
+        rows = []
+        for value in values:
+            cumulative += self[value]
+            rows.append(FrequencyRow(value, self[value], cumulative, self.total))
+        return tuple(rows)
+
+    def to_text(self, *, precision: int = 4, sort: bool = False, key=None, reverse: bool = False) -> str:
+        """Return a display table with absolute, relative and cumulative columns."""
+        from .rows import FrequencyRow, render_text
+        return render_text(self.rows(sort=sort, key=key, reverse=reverse), FrequencyRow.headers, precision=precision)
+
+    def _repr_html_(self) -> str:
+        """Display a safely escaped table in notebooks."""
+        from .rows import FrequencyRow, render_html
+        return render_html(self.rows(), FrequencyRow.headers)

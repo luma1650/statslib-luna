@@ -173,3 +173,90 @@ con una vacia lanzan `ValueError`. `table.py` y `cumulative_frequency` devuelven
 cero en tablas vacias, y `most_common` devuelve una lista vacia. `ddof` debe ser
 un entero no booleano, con `0 <= ddof < total`. El coeficiente de variacion
 requiere media distinta de cero. `find_pos` requiere una posicion entera.
+
+
+## Visualizadores FrequencyRow y GroupedFrequencyRow
+
+Las tablas generan filas inmutables de presentacion, sin expandir los conteos.
+Las filas exponen datos numericos y tambien pueden mostrarse en texto o HTML.
+No requieren Matplotlib, pandas ni un notebook para usarse.
+
+```python
+from statslib import (
+    FrequencyTable, GroupedFrequencyTable,
+    FrequencyRow, GroupedFrequencyRow,
+)
+from statslib.models.interval import Interval
+
+table = FrequencyTable([3, 1, 3, 2])
+rows = table.rows(sort=True)  # tuple de FrequencyRow
+print(table.to_text(sort=True, precision=3))
+print(rows[0].value, rows[0].frequency, rows[0].percentage)
+print(rows[0].to_dict())
+
+intervals = [Interval(0, 5), Interval(5, 10, closed_right=True)]
+grouped = GroupedFrequencyTable([1, 2, 5, 8, 10], intervals)
+print(grouped.to_text())
+row = grouped.rows()[0]
+print(row.interval, row.midpoint, row.width, row.density)
+
+# Tambien se pueden construir filas individuales:
+ordinary = FrequencyRow(value="A", frequency=2, cumulative_frequency=3, total=4)
+grouped_row = GroupedFrequencyRow(
+    interval=Interval(0, 5), frequency=2, cumulative_frequency=2, total=4,
+)
+```
+
+En Jupyter, evaluar `table`, `grouped` o una fila produce una tabla HTML
+mediante `_repr_html_()`. En consola usa `table.to_text()` o `print(row)`.
+`to_dict()` devuelve un diccionario nuevo con los encabezados de visualizacion
+como claves y conserva los valores originales, sin convertirlos a texto.
+
+Ambos tipos incluyen `frequency`, `cumulative_frequency`, `total`,
+`relative_frequency`, `cumulative_relative_frequency`, `percentage` y
+`cumulative_percentage`. Las filas agrupadas agregan `interval`, `midpoint`,
+`width` y `density` (frecuencia absoluta dividida entre amplitud).
+
+`FrequencyTable.rows()` conserva el orden de primera aparicion. `sort=True`,
+`key=` o `reverse=True` solicitan ordenacion; los acumulados siempre siguen
+el orden mostrado. Con orden de aparicion, esos acumulados no necesariamente
+coinciden con la CDF numerica. Las filas agrupadas siguen el orden de intervalos
+y conservan los intervalos con frecuencia cero.
+
+Las filas validan conteos enteros no booleanos y la relacion
+`0 <= frequency <= cumulative_frequency <= total`. Para muestras vacias, las
+columnas relativas y porcentuales de presentacion son cero. Esta convencion
+permite visualizar intervalos vacios y no cambia los errores de los metodos
+estadisticos existentes. Las observaciones se escapan al generar HTML.
+
+
+## Contratos ABC
+
+```python
+from statslib.abc import AbstractFrequencyTable, AbstractStatsSeries
+```
+
+`FrequencyTable` y `GroupedFrequencyTable` heredan de `AbstractFrequencyTable`,
+que respeta `collections.abc.Mapping`: `keys()` e iteracion producen observaciones
+(o intervalos); `values()` y `frequencies()` producen conteos; `items()` produce
+pares observacion-conteo. `len()` cuenta claves, incluidos intervalos vacios,
+y `total` cuenta observaciones. La verdad booleana sigue `len()`.
+
+Para implementar otra tabla basta proporcionar `__getitem__`, `__iter__` y
+`__len__`, respetando conteos enteros no negativos y `KeyError` para claves
+ausentes. La ABC proporciona vistas de Mapping, total, frecuencias relativas,
+porcentajes, PMF, CDF, moda, multimoda y expansion explicita con `iter_counts()`.
+Los constructores quedan a cargo de cada implementacion. La ABC no aplica cache,
+por lo que sus operaciones siguen siendo correctas con almacenamiento mutable.
+
+`mode` es una propiedad con un solo valor; `multimode` devuelve una tupla.
+`percentage()` devuelve el mapa completo, igual que en `FrequencyTable`.
+`frequency(valor)` devuelve cero si falta la clave, mientras `table[valor]`
+lanza `KeyError`. Las tablas agrupadas calculan acumuladas en orden de intervalos,
+sin intentar comparar objetos Interval con operadores numericos. Su media y
+varianza conservan el calculo aproximado por marcas de clase.
+
+`AbstractStatsSeries` requiere constructor, longitud e indexacion; implementa
+las estadisticas y los graficos sobre la interfaz Sequence. Las subclases no
+necesitan un atributo `_data`. `StatsSeries` agrega almacenamiento inmutable y
+cache de resultados. Las clases abstractas no pueden instanciarse directamente.

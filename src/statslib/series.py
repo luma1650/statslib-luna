@@ -1,9 +1,6 @@
 from collections.abc import Iterable, Iterator
 from functools import cached_property
-from typing import Self, overload, TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from matplotlib.axes import Axes
+from typing import Self, overload
 
 from statslib.abc.series import AbstractStatsSeries
 from statslib.algorithms.welford import WelfordVariance, WelfordMoments
@@ -123,50 +120,3 @@ class StatsSeries[T](AbstractStatsSeries[T]):
     @cached_property
     def excess_kurtosis(self) -> float:
         return self._moments.excess_kurtosis
-
-    def plot(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
-        """Plot observations against their zero-based index; return Axes.
-
-        Matplotlib is optional. Pass ax to compose plots and kwargs to
-        Axes.plot. Call pyplot.show() or ax.figure.savefig() yourself.
-        """
-        from statslib.plotting import get_axes, require_data
-        require_data(self)
-        ax = get_axes(ax)
-        ax.plot(range(len(self)), self._data, **kwargs)
-        ax.set_xlabel("Index")
-        ax.set_ylabel("Value")
-        return ax
-
-    def hist(self, bins=10, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
-        """Plot a numeric histogram; forward bins and kwargs to Axes.hist."""
-        from statslib.plotting import get_axes, require_data
-        require_data(self)
-        ax = get_axes(ax)
-        ax.hist(self._data, bins=bins, **kwargs)
-        value_label = "Value"
-        count_label = "Density" if kwargs.get("density", False) else "Frequency"
-        if kwargs.get("orientation", "vertical") == "horizontal":
-            ax.set_xlabel(count_label)
-            ax.set_ylabel(value_label)
-        else:
-            ax.set_xlabel(value_label)
-            ax.set_ylabel(count_label)
-        return ax
-
-    def boxplot(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
-        """Plot a box-and-whisker summary; forward kwargs to Axes.boxplot."""
-        from statslib.plotting import get_axes, require_data
-        require_data(self)
-        ax = get_axes(ax)
-        ax.boxplot(self._data, **kwargs)
-        return ax
-
-    def ecdf(self, *, ax: "Axes | None" = None, **kwargs: Any) -> "Axes":
-        """Plot the empirical CDF; forward kwargs to Axes.ecdf."""
-        from statslib.plotting import get_axes, require_data
-        require_data(self)
-        ax = get_axes(ax)
-        from statslib.plotting import draw_ecdf
-        draw_ecdf(ax, self._data, **kwargs)
-        return ax
