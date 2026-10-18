@@ -8,7 +8,7 @@ from statistics import multimode as std_multimode
 
 import pytest
 
-from statslib.frequency import FrequencyTable
+from statslib.frequency.table import FrequencyTable
 from statslib.series import StatsSeries
 
 

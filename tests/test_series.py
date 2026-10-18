@@ -1,404 +1,294 @@
 
+import math
+import random
+import statistics
+
 import pytest
 
-from collections.abc import Sequence
-from unittest.mock import patch
-
 from statslib.series import StatsSeries
+from statslib.abc.series import AbstractStatsSeries
+from statslib.frequency.table import FrequencyTable
 
 
 # ==========================================
-# CONSTRUCTION
+# ABSTRACT BASE CLASS
 # ==========================================
 
-@pytest.mark.parametrize("data", [
-    [],
-    [1],
-    [1, 2, 3],
-    (1, 2, 3),
-    range(10),
-    ["a", "b", "c"],
-])
-def test_construction(data):
-    series = StatsSeries(data)
-
-    assert list(series) == list(data)
-    assert len(series) == len(data)
-
-
-def test_generator_construction():
-    series = StatsSeries(x * 2 for x in range(5))
-
-    assert list(series) == [0, 2, 4, 6, 8]
-
-
-def test_original_list_mutation():
-    data = [1, 2, 3]
-    series = StatsSeries(data)
-
-    data.append(4)
-    data[0] = 100
-
-    assert list(series) == [1, 2, 3]
-
-
-def test_sequence_interface():
+def test_abstract_series_inheritance():
     series = StatsSeries([1, 2, 3])
 
-    assert isinstance(series, Sequence)
+    assert isinstance(series, AbstractStatsSeries)
 
 
-# ==========================================
-# LENGTH, ITERATION AND REVERSE
-# ==========================================
-
-def test_len():
-    assert len(StatsSeries([1, 2, 3])) == 3
-    assert len(StatsSeries([])) == 0
+def test_abstract_series_cannot_be_instantiated():
+    with pytest.raises(TypeError):
+        AbstractStatsSeries([1, 2, 3])
 
 
-def test_iteration():
-    series = StatsSeries([1, 2, 3])
-
-    assert list(iter(series)) == [1, 2, 3]
-    assert list(iter(series)) == [1, 2, 3]
-
-
-def test_reversed():
-    series = StatsSeries([1, 2, 3, 4])
-
-    assert list(reversed(series)) == [4, 3, 2, 1]
-
-
-def test_reversed_empty():
-    assert list(reversed(StatsSeries([]))) == []
-
-
-# ==========================================
-# INDEXING
-# ==========================================
-
-@pytest.mark.parametrize("index, expected", [
-    (0, 10),
-    (1, 20),
-    (2, 30),
-    (-1, 30),
-    (-2, 20),
-    (-3, 10),
-])
-def test_getitem(index, expected):
-    series = StatsSeries([10, 20, 30])
-
-    assert series[index] == expected
-
-
-@pytest.mark.parametrize("index", [3, -4, 100])
-def test_getitem_out_of_range(index):
-    series = StatsSeries([10, 20, 30])
-
-    with pytest.raises(IndexError):
-        _ = series[index]
-
-
-# ==========================================
-# SLICING
-# ==========================================
-
-@pytest.mark.parametrize("slc, expected", [
-    (slice(1, 4), [2, 3, 4]),
-    (slice(None, None), [1, 2, 3, 4, 5]),
-    (slice(None, None, 2), [1, 3, 5]),
-    (slice(None, None, -1), [5, 4, 3, 2, 1]),
-    (slice(2, 2), []),
-    (slice(10, 20), []),
-    (slice(-3, None), [3, 4, 5]),
-])
-def test_slicing(slc, expected):
+def test_abstract_series_slicing():
     series = StatsSeries([1, 2, 3, 4, 5])
-
-    result = series[slc]
-
-    assert isinstance(result, StatsSeries)
-    assert list(result) == expected
-
-
-def test_slicing_returns_independent_series():
-    series = StatsSeries([1, 2, 3, 4])
-
-    subset = series[1:3]
-
-    assert subset is not series
-    assert list(subset) == [2, 3]
-
-
-def test_slice_zero_step():
-    series = StatsSeries([1, 2, 3])
-
-    with pytest.raises(ValueError):
-        _ = series[::0]
-
-
-# ==========================================
-# SEQUENCE MIXINS
-# ==========================================
-
-def test_contains():
-    series = StatsSeries([1, 2, 3])
-
-    assert 2 in series
-    assert 10 not in series
-
-
-def test_count():
-    series = StatsSeries([2, 2, 3, 4, 2])
-
-    assert series.count(2) == 3
-    assert series.count(10) == 0
-
-
-def test_index():
-    series = StatsSeries([5, 3, 5, 7])
-
-    assert series.index(5) == 0
-    assert series.index(7) == 3
-
-    with pytest.raises(ValueError):
-        series.index(100)
-
-
-# ==========================================
-# EQUALITY
-# ==========================================
-
-def test_equality():
-    a = StatsSeries([1, 2, 3])
-    b = StatsSeries([1, 2, 3])
-    c = StatsSeries([3, 2, 1])
-
-    assert a == b
-    assert a != c
-
-
-def test_equality_different_types():
-    series = StatsSeries([1, 2, 3])
-
-    assert series != [1, 2, 3]
-    assert series != (1, 2, 3)
-
-
-def test_equality_empty():
-    assert StatsSeries([]) == StatsSeries([])
-
-
-# ==========================================
-# HASHING
-# ==========================================
-
-def test_hash_equal_series():
-    a = StatsSeries([1, 2, 3])
-    b = StatsSeries([1, 2, 3])
-
-    assert hash(a) == hash(b)
-
-
-def test_hash_matches_tuple():
-    series = StatsSeries([1, 2, 3])
-
-    assert hash(series) == hash((1, 2, 3))
-
-
-def test_hash_as_dict_key():
-    cache = {
-        StatsSeries([1, 2, 3]): "dataset A"
-    }
-
-    assert cache[StatsSeries([1, 2, 3])] == "dataset A"
-
-
-def test_unhashable_elements():
-    series = StatsSeries([[1], [2]])
-
-    with pytest.raises(TypeError):
-        hash(series)
-
-
-# ==========================================
-# FROM FREQUENCIES
-# ==========================================
-
-def test_from_frequencies():
-    series = StatsSeries.from_frequencies({
-        2: 3,
-        4: 2,
-        7: 1,
-    })
-
-    assert list(series) == [2, 2, 2, 4, 4, 7]
-
-
-def test_from_frequencies_zero():
-    series = StatsSeries.from_frequencies({
-        1: 0,
-        2: 2,
-        3: 0,
-    })
-
-    assert list(series) == [2, 2]
-
-
-def test_from_frequencies_empty():
-    series = StatsSeries.from_frequencies({})
-
-    assert len(series) == 0
-
-
-@pytest.mark.parametrize("frequency", [
-    -1,
-    -100,
-])
-def test_from_frequencies_negative(frequency):
-    with pytest.raises(ValueError):
-        StatsSeries.from_frequencies({1: frequency})
-
-
-@pytest.mark.parametrize("frequency", [
-    1.5,
-    "3",
-    None,
-    True,
-    False,
-])
-def test_from_frequencies_invalid_type(frequency):
-    with pytest.raises(TypeError):
-        StatsSeries.from_frequencies({1: frequency})
-
-
-def test_from_frequencies_string_keys():
-    series = StatsSeries.from_frequencies({
-        "a": 2,
-        "b": 1,
-    })
-
-    assert list(series) == ["a", "a", "b"]
-
-
-# ==========================================
-# REPRESENTATION
-# ==========================================
-
-def test_repr():
-    series = StatsSeries([1, 2, 3])
-
-    assert repr(series) == "StatsSeries([1, 2, 3])"
-
-
-def test_repr_empty():
-    assert repr(StatsSeries([])) == "StatsSeries([])"
-
-
-# ==========================================
-# STATISTICAL PROPERTIES
-# ==========================================
-
-def test_mean():
-    series = StatsSeries([2, 4, 6, 8])
-
-    assert series.mean == pytest.approx(5.0)
-
-
-def test_median_odd():
-    series = StatsSeries([5, 1, 3])
-
-    assert series.median == pytest.approx(3.0)
-
-
-def test_median_even():
-    series = StatsSeries([1, 2, 3, 4])
-
-    assert series.median == pytest.approx(2.5)
-
-
-def test_mode():
-    series = StatsSeries([1, 2, 2, 3])
-
-    assert series.mode == 2
-
-
-def test_multimode():
-    series = StatsSeries([1, 1, 2, 2, 3])
-
-    assert set(series.multimode) == {1, 2}
-
-
-def test_weighted_mean():
-    series = StatsSeries([10, 20, 30])
-
-    result = series.weighted_mean([1, 2, 3])
-
-    assert result == pytest.approx(140 / 6)
-
-
-def test_statistical_properties_on_slice():
-    series = StatsSeries([10, 20, 30, 40, 50])
 
     subset = series[1:4]
 
-    assert subset.mean == pytest.approx(30)
-    assert subset.median == pytest.approx(30)
+    assert isinstance(subset, StatsSeries)
+    assert isinstance(subset, AbstractStatsSeries)
+    assert list(subset) == [2, 3, 4]
 
 
 # ==========================================
-# CACHED PROPERTIES
+# DATA RANGE
 # ==========================================
 
-def test_mean_is_cached():
+@pytest.mark.parametrize("data, expected", [
+    ([1], 0),
+    ([1, 2, 3, 4, 5], 4),
+    ([-10, -5, 0, 5], 15),
+    ([5, 5, 5], 0),
+    ([1.5, 2.5, 10.5], 9),
+    ([100, -100], 200),
+])
+def test_data_range(data, expected):
+    series = StatsSeries(data)
+
+    assert series.data_range == pytest.approx(expected)
+
+
+def test_data_range_empty():
+    with pytest.raises(ValueError):
+        _ = StatsSeries([]).data_range
+
+
+# ==========================================
+# VARIANCE
+# ==========================================
+
+@pytest.mark.parametrize("data, population, sample", [
+    ([1, 2, 3], 2 / 3, 1),
+    ([1, 2, 3, 4, 5], 2, 2.5),
+    ([5, 5, 5], 0, 0),
+    ([10, 20], 25, 50),
+    ([-2, 0, 2], 8 / 3, 4),
+])
+def test_variance(data, population, sample):
+    series = StatsSeries(data)
+
+    assert series.variance(ddof=0) == pytest.approx(population)
+    assert series.variance(ddof=1) == pytest.approx(sample)
+
+
+def test_variance_single_observation():
+    series = StatsSeries([42])
+
+    assert series.variance(ddof=0) == 0
+
+    with pytest.raises(ValueError):
+        series.variance(ddof=1)
+
+
+@pytest.mark.parametrize("ddof", [-1, 3, 4, 100])
+def test_variance_invalid_ddof(ddof):
     series = StatsSeries([1, 2, 3])
 
-    with patch("statslib.series.mean", return_value=2.0) as mocked:
-        assert series.mean == 2.0
-        assert series.mean == 2.0
-
-        mocked.assert_called_once()
+    with pytest.raises(ValueError):
+        series.variance(ddof=ddof)
 
 
-def test_median_is_cached():
+@pytest.mark.parametrize("ddof", [0.5, "1", None, True])
+def test_variance_invalid_ddof_type(ddof):
     series = StatsSeries([1, 2, 3])
 
-    with patch("statslib.series.median", return_value=2.0) as mocked:
-        assert series.median == 2.0
-        assert series.median == 2.0
-
-        mocked.assert_called_once()
-
-
-def test_different_instances_have_separate_caches():
-    a = StatsSeries([1, 2, 3])
-    b = StatsSeries([10, 20, 30])
-
-    assert a.mean == 2
-    assert b.mean == 20
+    with pytest.raises(TypeError):
+        series.variance(ddof=ddof)
 
 
 # ==========================================
-# EMPTY SERIES
+# STANDARD DEVIATION
 # ==========================================
 
-def test_empty_mean():
-    series = StatsSeries([])
+@pytest.mark.parametrize("data", [
+    [1, 2],
+    [1, 2, 3, 4, 5],
+    [10, 10, 10],
+    [-10, 0, 10],
+    [1.5, 2.5, 4.5],
+])
+def test_stdev_against_stdlib(data):
+    series = StatsSeries(data)
 
+    assert series.stdev(ddof=0) == pytest.approx(
+        statistics.pstdev(data)
+    )
+
+    assert series.stdev(ddof=1) == pytest.approx(
+        statistics.stdev(data)
+    )
+
+
+def test_stdev_is_square_root_of_variance():
+    series = StatsSeries([2, 4, 8, 16])
+
+    for ddof in (0, 1):
+        assert series.stdev(ddof) == pytest.approx(
+            math.sqrt(series.variance(ddof))
+        )
+
+
+# ==========================================
+# MEAN ABSOLUTE DEVIATION
+# ==========================================
+
+@pytest.mark.parametrize("data, expected", [
+    ([1], 0),
+    ([1, 2, 3], 2 / 3),
+    ([1, 2, 3, 4, 5], 1.2),
+    ([5, 5, 5], 0),
+    ([0, 10], 5),
+    ([-2, 0, 2], 4 / 3),
+])
+def test_mean_absolute_deviation(data, expected):
+    series = StatsSeries(data)
+
+    assert series.mean_absolute_deviation == pytest.approx(
+        expected
+    )
+
+
+def test_mean_absolute_deviation_empty():
     with pytest.raises(ValueError):
-        _ = series.mean
+        _ = StatsSeries([]).mean_absolute_deviation
 
 
-def test_empty_median():
-    series = StatsSeries([])
+# ==========================================
+# MEDIAN ABSOLUTE DEVIATION
+# ==========================================
 
+@pytest.mark.parametrize("data, expected", [
+    ([1], 0),
+    ([1, 2, 3], 1),
+    ([1, 2, 3, 4, 5], 1),
+    ([5, 5, 5], 0),
+    ([0, 10], 5),
+    ([1, 1, 2, 2, 4, 6, 9], 1),
+])
+def test_median_absolute_deviation(data, expected):
+    series = StatsSeries(data)
+
+    assert series.median_absolute_deviation == pytest.approx(
+        expected
+    )
+
+
+def test_median_absolute_deviation_empty():
     with pytest.raises(ValueError):
-        _ = series.median
+        _ = StatsSeries([]).median_absolute_deviation
 
 
-def test_empty_mode():
-    series = StatsSeries([])
+# ==========================================
+# CACHE
+# ==========================================
 
-    with pytest.raises(ValueError):
-        _ = series.mode
+@pytest.mark.parametrize("attribute", [
+    "mean",
+    "median",
+    "mode",
+    "multimode",
+    "data_range",
+    "mean_absolute_deviation",
+    "median_absolute_deviation",
+    "frequency_table",
+])
+def test_cached_statistical_property(attribute):
+    series = StatsSeries([1, 2, 2, 3, 4])
+
+    first = getattr(series, attribute)
+    second = getattr(series, attribute)
+
+    assert first is second
+    assert attribute in vars(series)
+
+
+# ==========================================
+# FREQUENCY TABLE INTEGRATION
+# ==========================================
+
+def test_frequency_table_integration():
+    series = StatsSeries([2, 2, 3, 3, 3, 5])
+
+    table = series.frequency_table
+
+    assert isinstance(table, FrequencyTable)
+    assert dict(table) == {2: 2, 3: 3, 5: 1}
+    assert table.total == len(series)
+
+
+def test_frequency_table_statistics_consistency():
+    series = StatsSeries([2, 2, 3, 3, 3, 5])
+    table = series.frequency_table
+
+    assert table.mean == pytest.approx(series.mean)
+    assert table.median == pytest.approx(series.median)
+    assert table.mode == series.mode
+    assert set(table.multimode) == set(series.multimode)
+
+
+# ==========================================
+# RANDOMIZED REFERENCE TESTS
+# ==========================================
+
+def test_randomized_dispersion():
+    rng = random.Random(42)
+
+    for n in range(2, 101):
+        for _ in range(20):
+            data = [
+                rng.randint(-100, 100)
+                for _ in range(n)
+            ]
+
+            series = StatsSeries(data)
+
+            assert series.variance(0) == pytest.approx(
+                statistics.pvariance(data)
+            )
+
+            assert series.variance(1) == pytest.approx(
+                statistics.variance(data)
+            )
+
+            assert series.stdev(0) == pytest.approx(
+                statistics.pstdev(data)
+            )
+
+            assert series.stdev(1) == pytest.approx(
+                statistics.stdev(data)
+            )
+
+            assert series.data_range == max(data) - min(data)
+
+
+# ==========================================
+# NUMERICAL STABILITY
+# ==========================================
+
+def test_variance_large_offset():
+    data = [
+        1_000_000_000 + x
+        for x in [-2, -1, 0, 1, 2]
+    ]
+
+    series = StatsSeries(data)
+
+    assert series.variance(0) == pytest.approx(2.0)
+    assert series.variance(1) == pytest.approx(2.5)
+
+
+def test_variance_does_not_mutate_series():
+    series = StatsSeries([5, 1, 4, 2, 3])
+    original = list(series)
+
+    series.variance()
+    series.stdev()
+    _ = series.mean_absolute_deviation
+    _ = series.median_absolute_deviation
+
+    assert list(series) == original

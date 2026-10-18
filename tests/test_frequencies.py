@@ -2,9 +2,8 @@
 import pytest
 
 from collections.abc import Mapping
-from unittest.mock import patch
 
-from statslib.frequency import FrequencyTable
+from statslib.frequency.table import FrequencyTable
 
 
 # ==========================================

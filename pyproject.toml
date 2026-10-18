@@ -8,9 +8,17 @@ version = "0.1.0"
 description = "A Python statistics library built from scratch"
 requires-python = ">=3.12"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
 dependencies = [
     "frozendict; python_version < '3.15'"
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+plot = ["matplotlib>=3.8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

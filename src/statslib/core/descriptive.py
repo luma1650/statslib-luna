@@ -1,6 +1,5 @@
 from collections import Counter
-from collections.abc import Iterable
-from typing import Any, TypeVar, Protocol
+from collections.abc import Iterable, MutableSequence
 
 from protocols import SupportsLE
 
@@ -141,10 +140,8 @@ def multimode[T](iterable: Iterable[T]) -> list[T]:
 
     Notes:
         Hashable values produce distinct modes in encounter order. The
-        sorting fallback accumulates candidates when a running count
-        matches or exceeds the current best; its result may omit the first
-        sorted value when all counts are one. The equality-only fallback
-        can include repeated occurrences of the same modal value.
+        sorting fallback returns distinct modes in sorted order. The
+        equality-only fallback returns distinct modes in encounter order.
     """
     data = list(iterable)
 
@@ -160,44 +157,28 @@ def multimode[T](iterable: Iterable[T]) -> list[T]:
         target_count = counter.most_common(1)[0][1]
         return [value for value in counter if counter[value] == target_count]
 
-    # O(n log n): orderable objects
-    modes = []
+    # Group equal sorted values once; avoid duplicate modal candidates.
     try:
         ordered = sorted(data)
     except TypeError:
-        pass
-    else:
-        best_value = ordered[0]
-        best_count = 1
-        current_count = 1
-
-        for i in range(1, len(ordered)):
-            if ordered[i] == ordered[i - 1]:
-                current_count += 1
+        groups = []
+        for value in data:
+            for group in groups:
+                if value == group[0]:
+                    group[1] += 1
+                    break
             else:
-                current_count = 1
+                groups.append([value, 1])
+    else:
+        groups = [[ordered[0], 1]]
+        for value in ordered[1:]:
+            if value == groups[-1][0]:
+                groups[-1][1] += 1
+            else:
+                groups.append([value, 1])
 
-            if current_count > best_count:
-                best_count = current_count
-                modes = [ordered[i]]
-            elif current_count == best_count:
-                modes.append(ordered[i])
-
-        return modes
-
-    # O(n²): equality-only objects
-    best_count = 0
-
-    for value in data:
-        count = sum(item == value for item in data)
-
-        if count > best_count:
-            best_count = count
-            modes = [value]
-        elif count == best_count:
-            modes.append(value)
-
-    return modes
+    maximum = max(count for _, count in groups)
+    return [value for value, count in groups if count == maximum]
 
 
 def weighted_mean(iterable: Iterable[float], weights : Iterable[float]) -> float:
@@ -225,7 +206,7 @@ def weighted_mean(iterable: Iterable[float], weights : Iterable[float]) -> float
 
 
 
-def quickselect[T: SupportsLE](data: list[T], k: int) -> T:
+def quickselect[T: SupportsLE](data: MutableSequence[T], k: int) -> T:
     """Select the observation at zero-based sorted rank k.
 
     Args:
@@ -253,24 +234,42 @@ def quickselect[T: SupportsLE](data: list[T], k: int) -> T:
     left = 0
     right = len(data) - 1
 
+    # Three-way partition avoids quadratic scans on repeated values.
+    # A bounded partition budget falls back to sorting adversarial inputs.
+    budget = 2 * len(data).bit_length()
     while left <= right:
-        pivot_index = partition(data, left, right)
-
-        if pivot_index == k:
-            return data[k]
-        elif pivot_index > k:
-            right = pivot_index - 1
+        if budget == 0:
+            return sorted(data[left:right + 1])[k - left]
+        budget -= 1
+        middle = (left + right) // 2
+        pivot = sorted((data[left], data[middle], data[right]))[1]
+        lower = current = left
+        upper = right
+        while current <= upper:
+            if not pivot <= data[current]:
+                data[lower], data[current] = data[current], data[lower]
+                lower += 1
+                current += 1
+            elif not data[current] <= pivot:
+                data[current], data[upper] = data[upper], data[current]
+                upper -= 1
+            else:
+                current += 1
+        if k < lower:
+            right = lower - 1
+        elif k > upper:
+            left = upper + 1
         else:
-            left = pivot_index + 1
+            return data[k]
 
     raise RuntimeError("Quickselect failed")
 
 
-def partition(data: list[SupportsLE], left: int, right: int) -> int:
+def partition(data: MutableSequence[SupportsLE], left: int, right: int) -> int:
     """Partition an inclusive list segment around its rightmost value.
 
     Args:
-        data: Mutable list whose elements support ordering.
+        data   : Mutable list whose elements support ordering.
         left: Inclusive start index of the segment.
         right: Inclusive end index and initial pivot position.
 
